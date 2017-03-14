@@ -1,7 +1,7 @@
 import os
 from os.path import join
 import gzip
-import subprocess
+from subprocess import Popen, PIPE
 import re
 import sys
 from collections import defaultdict
@@ -49,14 +49,13 @@ def prev(i):
 	return i
 
 def read_manpage(prog):
-	p = subprocess.Popen(["man", prog], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	err = p.stderr.read()
-	if len(err) > 0:
-		print "man error: %s" % err
+	p = Popen(["man", prog], stdout=PIPE, stderr=PIPE)
+	stdout,stderr = p.communicate()
+	if p.returncode != 0:
+		print "[ERROR]",stderr.strip()
 		return None
 
-	return p.stdout.read().strip().split("\n")
-
+	return stdout
 
 class IndentionException(Exception):
 	def __init__(self, err):
@@ -236,9 +235,10 @@ if __name__ == '__main__':
 	params = sys.argv[2:]
 	print "cli: %s %s" % (prog, " ".join(params))
 
-	lines = read_manpage(prog)
-	if lines is None:
+	manpage = read_manpage(prog)
+	if manpage is None:
 		exit(1)
+	lines = manpage.split("\n")
 
 	try:
 		lookup = gen_lookup(lines)
