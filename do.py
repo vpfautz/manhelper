@@ -48,6 +48,7 @@ def prev(i):
 		i -= 1
 	return i
 
+# Returns the man page of a given programm or None, if it don't exists.
 def read_manpage(prog):
 	p = Popen(["man", prog], stdout=PIPE, stderr=PIPE)
 	stdout,stderr = p.communicate()
@@ -57,13 +58,15 @@ def read_manpage(prog):
 
 	return stdout
 
+# An IndentionException will be raised, if the most commen indention
+# is not like we expect it.
 class IndentionException(Exception):
 	def __init__(self, err):
 		super(IndentionException, self).__init__()
 		self.err = err
 
-
-def get_cmd_indention(lines):
+# Returns the most commen indention of keys.
+def get_key_indention(lines):
 	count = defaultdict(int)
 	for l in lines:
 		if not l.strip().startswith("-"):
@@ -74,10 +77,11 @@ def get_cmd_indention(lines):
 	if len(count) == 0:
 		raise IndentionException("no normal parameters")
 
-	cmd_indention = max(count.items(), key=lambda (x,y):y)[0]
-	debug("cmd_indention: %s" % cmd_indention)
-	return cmd_indention
+	key_indention = max(count.items(), key=lambda (x,y):y)[0]
+	debug("key_indention: %s" % key_indention)
+	return key_indention
 
+# Returns the indention of most commen descriptions.
 def get_descr_indention(lines):
 	count = defaultdict(int)
 	for i,l in enumerate(lines):
@@ -96,46 +100,47 @@ def get_descr_indention(lines):
 	debug("descr_indention: %s" % descr_indention)
 	return descr_indention
 
-def annotate_lines(lines, cmd_indention, descr_indention):
-	cmd_prefix = " "*cmd_indention+"-"
+# Annotates the given lines as key or description.
+def annotate_lines(lines, key_indention, descr_indention):
+	key_prefix = " "*key_indention+"-"
 
-	cmd_lines = set()
+	key_lines = set()
 	descr_lines = set()
 
 	debug("lines: %s" % len(lines))
 
 	for i,l in enumerate(lines):
-		if l.startswith(cmd_prefix):
+		if l.startswith(key_prefix):
 			k = i + 1
-			while lines[k].startswith(cmd_prefix) or len(lines[k].strip()) == 0:
+			while lines[k].startswith(key_prefix) or len(lines[k].strip()) == 0:
 				k += 1
 			if get_indent(lines[k]) == descr_indention:
-				if descr_indention < len(l) and l[descr_indention] in string.ascii_letters and l[descr_indention-1] == " ":
-					debug(clr(l[:descr_indention], Color.BLUE) + clr(l[descr_indention:], Color.GREEN))
+				if descr_indention < len(l) andl[descr_indention] in string.ascii_letters and l[descr_indention-1] == " ":
 					descr_lines.add(i)
-				else:
-					debug(clr(l, Color.BLUE))
-				cmd_lines.add(i)
-			else:
-				debug(l)
+				key_lines.add(i)
+
 		elif get_indent(l) == descr_indention:
-			if prev(i) in cmd_lines or prev(i) in descr_lines:
+			if prev(i) in key_lines or prev(i) in descr_lines:
 				descr_lines.add(i)
-				debug(clr(l, Color.GREEN))
-			else:
-				debug(l)
+
 		elif get_indent(l) > descr_indention:
 			if prev(i) in descr_lines:
 				descr_lines.add(i)
-				debug(clr(l, Color.GREEN))
-			else:
-				debug(l)
+
+		# debug output
+		if i in key_lines and i in descr_lines:
+			debug(clr(l[:descr_indention], Color.BLUE) +
+			      clr(l[descr_indention:], Color.GREEN))
+		elif i in key_lines:
+			debug(clr(l, Color.BLUE))
+		elif i in descr_lines:
+			debug(clr(l, Color.GREEN))
 		else:
 			debug(l)
 
-	return (cmd_lines, descr_lines)
+	return (key_lines, descr_lines)
 
-
+# Converts a long key like "-a <b>" to a short key like "-a".
 def short_key(key):
 	rem = re.findall("([ =].+$)|(<.+?>)|(\[.+?\])", key)
 	for a,b,c in rem:
@@ -144,6 +149,8 @@ def short_key(key):
 		key = key.replace(c, "")
 	return key
 
+# An Option represents a cli Option, which can have multiple keys and a
+# multiline description.
 class Option(object):
 	def __init__(self, keys):
 		super(Option, self).__init__()
@@ -152,20 +159,24 @@ class Option(object):
 		self.add_keys(keys)
 		self.descr = []
 
+	# Parse given keys
 	def parse_keys(self, keys):
 		return map(lambda x:x.strip(), keys.split(", "))
 
+	# Returns true if this already has some description.
 	def has_descr(self):
 		return len(self.descr) > 0
 
+	# Add a keyline from manpage to keys.
 	def add_keys(self, keys):
 		new = self.parse_keys(keys)
 		self.keys += new
 		for k in new:
 			self.keys_short.append(short_key(k))
 
-	def add_descr(self, d):
-		self.descr.append(d)
+	# Add a description line.
+	def add_descr(self, description):
+		self.descr.append(description)
 
 	def __repr__(self):
 		r = ""
@@ -174,27 +185,28 @@ class Option(object):
 		r += "descr: \n%s" % "\n".join(self.descr)
 		return r
 
+# Parse the given lines and return a dictionary key -> Option.
 def lines_to_options(lines):
-	cmd_indention = get_cmd_indention(lines)
+	key_indention = get_key_indention(lines)
 	descr_indention = get_descr_indention(lines)
 
-	if descr_indention <= cmd_indention:
-		raise IndentionException("descr_indention <= cmd_indention!")
+	if descr_indention <= key_indention:
+		raise IndentionException("descr_indention <= key_indention!")
 
-	cmd_lines,descr_lines = annotate_lines(lines, cmd_indention, descr_indention)
+	key_lines,descr_lines = annotate_lines(lines, key_indention, descr_indention)
 
 	options = {}
 	curr_key = None
 
 	for i,l in enumerate(lines):
-		if i in cmd_lines and not i in descr_lines:
+		if i in key_lines and not i in descr_lines:
 			if curr_key is None or (not curr_key is None and options[curr_key].has_descr()):
 				curr_key = l.strip()
 				options[curr_key] = Option(curr_key)
 			else:
 				options[curr_key].add_keys(l.strip())
 
-		elif i in cmd_lines and i in descr_lines:
+		elif i in key_lines and i in descr_lines:
 
 			if curr_key is None or (not curr_key is None and options[curr_key].has_descr()):
 				curr_key = l[:descr_indention].strip()
@@ -208,13 +220,12 @@ def lines_to_options(lines):
 
 	return options
 
+# Generate lookuptable option -> Option, from given manpage lines.
 def gen_lookup(lines):
 	options = lines_to_options(lines)
 
 	all_shorts = {}
 	for o in options:
-		# print "-"*40
-		# print options[o]
 		for s in options[o].keys_short:
 			if s in all_shorts:
 				print "collision:"
@@ -225,6 +236,7 @@ def gen_lookup(lines):
 				all_shorts[s] = options[o]
 
 	return all_shorts
+
 
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
