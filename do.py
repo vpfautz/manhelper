@@ -230,6 +230,9 @@ def gen_lookup(lines):
 	return all_shorts
 
 if __name__ == '__main__':
+	if len(sys.argv) < 2:
+		print "usage: %s cli" % sys.argv[0]
+		exit(1)
 
 	prog = sys.argv[1]
 	params = sys.argv[2:]
