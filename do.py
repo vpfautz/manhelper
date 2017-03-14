@@ -65,7 +65,6 @@ class IndentionException(Exception):
 
 
 def get_cmd_indention(lines):
-	# get cmd indention
 	count = defaultdict(int)
 	for l in lines:
 		if not l.strip().startswith("-"):
@@ -81,7 +80,6 @@ def get_cmd_indention(lines):
 	return cmd_indention
 
 def get_descr_indention(lines):
-	# get descr indention
 	count = defaultdict(int)
 	for i,l in enumerate(lines):
 		if i==0:
