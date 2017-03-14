@@ -249,7 +249,10 @@ if __name__ == '__main__':
 	for p in params:
 		print ""
 		k = short_key(p)
-		if k in lookup:
+		if not k.startswith("-"):
+			# skip parameters without - beginning
+			continue
+		elif k in lookup:
 			o = lookup[k]
 			print "keys:   %s" % ", ".join(o.keys)
 			print "descr:  %s" % "\n        ".join(map(lambda x:x.strip(),o.descr))
