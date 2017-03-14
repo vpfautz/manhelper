@@ -7,18 +7,6 @@ import sys
 from collections import defaultdict
 import string
 
-"""
-# cli = "wget -i heise.de"
-# cli = "wget -O /dev/null http://cachefly.cachefly.net/100mb.test"
-cli = "ag -i"
-prog = cli.split(" ")[0]
-params = cli.split(" ")[1:]
-"""
-
-prog = sys.argv[1]
-params = sys.argv[2:]
-print "cli: %s %s" % (prog, " ".join(params))
-
 
 DEBUG = False
 def debug(s):
@@ -60,77 +48,96 @@ def prev(i):
 		i -= 1
 	return i
 
+def read_manpage(prog):
+	p = subprocess.Popen(["man", prog], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	err = p.stderr.read()
+	if len(err) > 0:
+		print "man error: %s" % err
+		return None
 
-p = subprocess.Popen(["man", prog], stdout=subprocess.PIPE)
-manfile = p.stdout.read().strip()
-
-lines = manfile.split("\n")
-
-# get cmd indention
-count = defaultdict(int)
-for l in lines:
-	if not l.strip().startswith("-"):
-		continue
-
-	count[get_indent(l)] += 1
-
-if len(count) == 0:
-	print "no normal parameters"
-	exit()
-
-cmd_indention = max(count.items(), key=lambda (x,y):y)[0]
-debug("cmd_indention: %s" % cmd_indention)
-
-# get descr indention
-count = defaultdict(int)
-for i,l in enumerate(lines):
-	if i==0:
-		continue
-
-	if not lines[prev(i)].strip().startswith("-"):
-		continue
-
-	count[get_indent(l)] += 1
-
-descr_indention = max(count.items(), key=lambda (x,y):y)[0]
-debug("descr_indention: %s" % descr_indention)
-
-cmd_prefix = " "*cmd_indention+"-"
-
-cmd_lines = set()
-descr_lines = set()
-
-debug("lines: %s" % len(lines))
+	return p.stdout.read().strip().split("\n")
 
 
-for i,l in enumerate(lines):
-	if l.startswith(cmd_prefix):
-		k = i + 1
-		while lines[k].startswith(cmd_prefix) or len(lines[k].strip()) == 0:
-			k += 1
-		if get_indent(lines[k]) == descr_indention:
-			if descr_indention < len(l) and l[descr_indention] in string.ascii_letters and l[descr_indention-1] == " ":
-				debug(clr(l[:descr_indention], Color.BLUE) + clr(l[descr_indention:], Color.GREEN))
-				descr_lines.add(i)
+class IndentionException(Exception):
+	def __init__(self, err):
+		super(IndentionException, self).__init__()
+		self.err = err
+
+
+def get_cmd_indention(lines):
+	# get cmd indention
+	count = defaultdict(int)
+	for l in lines:
+		if not l.strip().startswith("-"):
+			continue
+
+		count[get_indent(l)] += 1
+
+	if len(count) == 0:
+		raise IndentionException("no normal parameters")
+
+	cmd_indention = max(count.items(), key=lambda (x,y):y)[0]
+	debug("cmd_indention: %s" % cmd_indention)
+	return cmd_indention
+
+def get_descr_indention(lines):
+	# get descr indention
+	count = defaultdict(int)
+	for i,l in enumerate(lines):
+		if i==0:
+			continue
+
+		if not lines[prev(i)].strip().startswith("-"):
+			continue
+
+		count[get_indent(l)] += 1
+
+	if len(count) == 0:
+		raise IndentionException("no normal description")
+
+	descr_indention = max(count.items(), key=lambda (x,y):y)[0]
+	debug("descr_indention: %s" % descr_indention)
+	return descr_indention
+
+def annotate_lines(lines, cmd_indention, descr_indention):
+	cmd_prefix = " "*cmd_indention+"-"
+
+	cmd_lines = set()
+	descr_lines = set()
+
+	debug("lines: %s" % len(lines))
+
+	for i,l in enumerate(lines):
+		if l.startswith(cmd_prefix):
+			k = i + 1
+			while lines[k].startswith(cmd_prefix) or len(lines[k].strip()) == 0:
+				k += 1
+			if get_indent(lines[k]) == descr_indention:
+				if descr_indention < len(l) and l[descr_indention] in string.ascii_letters and l[descr_indention-1] == " ":
+					debug(clr(l[:descr_indention], Color.BLUE) + clr(l[descr_indention:], Color.GREEN))
+					descr_lines.add(i)
+				else:
+					debug(clr(l, Color.BLUE))
+				cmd_lines.add(i)
 			else:
-				debug(clr(l, Color.BLUE))
-			cmd_lines.add(i)
+				debug(l)
+		elif get_indent(l) == descr_indention:
+			if prev(i) in cmd_lines or prev(i) in descr_lines:
+				descr_lines.add(i)
+				debug(clr(l, Color.GREEN))
+			else:
+				debug(l)
+		elif get_indent(l) > descr_indention:
+			if prev(i) in descr_lines:
+				descr_lines.add(i)
+				debug(clr(l, Color.GREEN))
+			else:
+				debug(l)
 		else:
 			debug(l)
-	elif get_indent(l) == descr_indention:
-		if prev(i) in cmd_lines or prev(i) in descr_lines:
-			descr_lines.add(i)
-			debug(clr(l, Color.GREEN))
-		else:
-			debug(l)
-	elif get_indent(l) > descr_indention:
-		if prev(i) in descr_lines:
-			descr_lines.add(i)
-			debug(clr(l, Color.GREEN))
-		else:
-			debug(l)
-	else:
-		debug(l)
+
+	return (cmd_lines, descr_lines)
+
 
 def short_key(key):
 	rem = re.findall("([ =].+$)|(<.+?>)|(\[.+?\])", key)
@@ -170,51 +177,82 @@ class Option(object):
 		r += "descr: \n%s" % "\n".join(self.descr)
 		return r
 
-options = {}
-curr_key = None
+def lines_to_options(lines):
+	cmd_indention = get_cmd_indention(lines)
+	descr_indention = get_descr_indention(lines)
 
-for i,l in enumerate(lines):
-	if i in cmd_lines and not i in descr_lines:
-		if curr_key is None or (not curr_key is None and options[curr_key].has_descr()):
-			curr_key = l.strip()
-			options[curr_key] = Option(curr_key)
+	if descr_indention <= cmd_indention:
+		raise IndentionException("descr_indention <= cmd_indention!")
+
+	cmd_lines,descr_lines = annotate_lines(lines, cmd_indention, descr_indention)
+
+	options = {}
+	curr_key = None
+
+	for i,l in enumerate(lines):
+		if i in cmd_lines and not i in descr_lines:
+			if curr_key is None or (not curr_key is None and options[curr_key].has_descr()):
+				curr_key = l.strip()
+				options[curr_key] = Option(curr_key)
+			else:
+				options[curr_key].add_keys(l.strip())
+
+		elif i in cmd_lines and i in descr_lines:
+
+			if curr_key is None or (not curr_key is None and options[curr_key].has_descr()):
+				curr_key = l[:descr_indention].strip()
+				options[curr_key] = Option(curr_key)
+			else:
+				options[curr_key].add_keys(l[:descr_indention].strip())
+
+			options[curr_key].add_descr(l[descr_indention:])
+		elif i in descr_lines:
+			options[curr_key].add_descr(l)
+
+	return options
+
+def gen_lookup(lines):
+	options = lines_to_options(lines)
+
+	all_shorts = {}
+	for o in options:
+		# print "-"*40
+		# print options[o]
+		for s in options[o].keys_short:
+			if s in all_shorts:
+				print "collision:"
+				print all_shorts[s]
+				print options[o]
+				exit()
+			else:
+				all_shorts[s] = options[o]
+
+	return all_shorts
+
+if __name__ == '__main__':
+
+	prog = sys.argv[1]
+	params = sys.argv[2:]
+	print "cli: %s %s" % (prog, " ".join(params))
+
+	lines = read_manpage(prog)
+	if lines is None:
+		exit(1)
+
+	try:
+		lookup = gen_lookup(lines)
+	except IndentionException as e:
+		print "[ERROR]", e.err
+		exit(1)
+
+	for p in params:
+		print ""
+		k = short_key(p)
+		if k in lookup:
+			o = lookup[k]
+			print "keys:   %s" % ", ".join(o.keys)
+			print "descr:  %s" % "\n        ".join(map(lambda x:x.strip(),o.descr))
 		else:
-			options[curr_key].add_keys(l.strip())
-
-	elif i in cmd_lines and i in descr_lines:
-
-		if curr_key is None or (not curr_key is None and options[curr_key].has_descr()):
-			curr_key = l[:descr_indention].strip()
-			options[curr_key] = Option(curr_key)
-		else:
-			options[curr_key].add_keys(l[:descr_indention].strip())
-
-		options[curr_key].add_descr(l[descr_indention:])
-	elif i in descr_lines:
-		options[curr_key].add_descr(l)
-
-all_shorts = {}
-for o in options:
-	# print "-"*40
-	# print options[o]
-	for s in options[o].keys_short:
-		if s in all_shorts:
-			print "collision:"
-			print all_shorts[s]
-			print options[o]
-			exit()
-		else:
-			all_shorts[s] = options[o]
-
-
-for p in params:
-	print ""
-	k = short_key(p)
-	if k in all_shorts:
-		o = all_shorts[k]
-		print "keys:   %s" % ", ".join(o.keys)
-		print "descr:  %s" % "\n        ".join(map(lambda x:x.strip(),o.descr))
-	else:
-		print "unknown param:",k
+			print "unknown param:",k
 
 
