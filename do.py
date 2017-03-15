@@ -1,3 +1,6 @@
+#!/usr/bin/env python2
+#coding: UTF-8
+
 import os
 from os.path import join
 import gzip
