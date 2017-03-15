@@ -1,6 +1,6 @@
 # man helper
 
-A tiny tool to show man page entries to a given cli.
+A tiny tool to show man page entries to a given CLI.
 
 ## Requirements
 
@@ -9,7 +9,7 @@ Unix with `man`.
 ## Usage
 
 ```
-./do.py [cli]
+./do.py CLI
 ```
 
 example:
