@@ -25,4 +25,3 @@ descr:  Don't actually display the manual pages, but do print the location(s) of
 ## TODO
 
 - git plugin
-- handle concated options like `ls -al`
