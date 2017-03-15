@@ -4,7 +4,7 @@ A tiny tool to show man page entries to a given CLI.
 
 ## Requirements
 
-Unix with `man`.
+Unix with `man` and Python2.
 
 ## Usage
 
