@@ -242,6 +242,40 @@ def gen_lookup(lines):
 
 	return all_shorts
 
+def possible_multi_param(param):
+	return not re.search("^(-\w\w+)$", param) is None
+
+assert possible_multi_param("-a") == False
+assert possible_multi_param("a") == False
+assert possible_multi_param("aaaaa") == False
+assert possible_multi_param("--aaaaa") == False
+assert possible_multi_param("--a") == False
+assert possible_multi_param("-ab") == True
+assert possible_multi_param("-abc") == True
+
+first = True
+
+def print_key_descr(key, lookup):
+	global first
+	if key in lookup:
+		o = lookup[key]
+		if not first:
+			print ""
+		first = False
+		print "keys:   %s" % ", ".join(o.keys)
+		print "descr:  %s" % "\n        ".join(map(lambda x:x.strip(),o.descr))
+		return
+
+	if not possible_multi_param(key):
+		if not first:
+			print ""
+		first = False
+		print "unknown param:",key
+		return
+
+	for single in key[1:]:
+		print_key_descr("-%s" % single)
+
 
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
@@ -250,7 +284,7 @@ if __name__ == '__main__':
 
 	prog = sys.argv[1]
 	params = sys.argv[2:]
-	print "cli: %s %s" % (prog, " ".join(params))
+	debug("cli: %s %s" % (prog, " ".join(params)))
 
 	manpage = read_manpage(prog)
 	if manpage is None:
@@ -263,17 +297,12 @@ if __name__ == '__main__':
 		print "[ERROR]", e.err
 		exit(1)
 
-	for p in params:
-		print ""
-		k = short_key(p)
-		if not k.startswith("-"):
+	for param in params:
+		key = short_key(param)
+		if not key.startswith("-"):
 			# skip parameters without - beginning
 			continue
-		elif k in lookup:
-			o = lookup[k]
-			print "keys:   %s" % ", ".join(o.keys)
-			print "descr:  %s" % "\n        ".join(map(lambda x:x.strip(),o.descr))
-		else:
-			print "unknown param:",k
+
+		print_key_descr(key, lookup)
 
 
