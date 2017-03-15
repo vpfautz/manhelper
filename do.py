@@ -115,7 +115,7 @@ def annotate_lines(lines, key_indention, descr_indention):
 			while lines[k].startswith(key_prefix) or len(lines[k].strip()) == 0:
 				k += 1
 			if get_indent(lines[k]) == descr_indention:
-				if descr_indention < len(l) andl[descr_indention] in string.ascii_letters and l[descr_indention-1] == " ":
+				if descr_indention < len(l) and l[descr_indention] in string.ascii_letters and l[descr_indention-1] == " ":
 					descr_lines.add(i)
 				key_lines.add(i)
 
