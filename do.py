@@ -274,7 +274,7 @@ def print_key_descr(key, lookup):
 		return
 
 	for single in key[1:]:
-		print_key_descr("-%s" % single)
+		print_key_descr("-%s" % single, lookup)
 
 
 if __name__ == '__main__':
