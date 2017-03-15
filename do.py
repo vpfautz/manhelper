@@ -262,7 +262,7 @@ def print_key_descr(key, lookup):
 		if not first:
 			print ""
 		first = False
-		print "keys:   %s" % ", ".join(o.keys)
+		print "option: %s" % ", ".join(o.keys)
 		print "descr:  %s" % "\n        ".join(map(lambda x:x.strip(),o.descr))
 		return
 
