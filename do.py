@@ -145,11 +145,12 @@ def annotate_lines(lines, key_indention, descr_indention):
 
 # Converts a long key like "-a <b>" to a short key like "-a".
 def short_key(key):
-	rem = re.findall("([ =].+$)|(<.+?>)|(\[.+?\])", key)
-	for a,b,c in rem:
+	rem = re.findall("( .+$)|=(.+$)|(<.+?>)|(\[.+?\])", key)
+	for a,b,c,d in rem:
 		key = key.replace(a, "")
 		key = key.replace(b, "")
 		key = key.replace(c, "")
+		key = key.replace(d, "")
 	return key
 
 # An Option represents a cli Option, which can have multiple keys and a
@@ -231,10 +232,11 @@ def gen_lookup(lines):
 	for o in options:
 		for s in options[o].keys_short:
 			if s in all_shorts:
-				print "collision:"
-				print all_shorts[s]
-				print options[o]
-				exit()
+				debug("collision:")
+				debug(all_shorts[s])
+				debug(options[o])
+				# TODO maybe show both?
+				del all_shorts[s]
 			else:
 				all_shorts[s] = options[o]
 
